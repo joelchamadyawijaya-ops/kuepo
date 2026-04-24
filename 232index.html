@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Fintech AI Super App</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+
+<style>
+body{font-family:sans-serif;background:#0f172a;color:white}
+.card{background:#1e293b;padding:20px;margin:10px;border-radius:12px}
+input,button,select{padding:10px;margin:5px;border-radius:8px;border:none}
+.badge{padding:5px 10px;border-radius:20px}
+.hemat{background:#22c55e}
+.normal{background:#eab308}
+.boros{background:#ef4444}
+</style>
+</head>
+
+<body>
+
+<h2>💰 Fintech AI Super (1 File)</h2>
+
+<div class="card">
+<h3>Login</h3>
+<input id="user" placeholder="user">
+<input id="pass" type="password">
+<button onclick="login()">Login</button>
+<button onclick="register()">Register</button>
+</div>
+
+<div id="app" style="display:none">
+
+<div class="card">
+<h3>Status AI</h3>
+<p id="status"></p>
+<p id="advice"></p>
+<span id="badge" class="badge normal">Normal</span>
+</div>
+
+<div class="card">
+<h3>Tambah Pengeluaran</h3>
+<input id="exp" type="number">
+<button onclick="add()">Tambah</button>
+</div>
+
+<div class="card">
+<h3>Kurs</h3>
+USD: <span id="usd"></span>
+</div>
+
+<div class="card">
+<h3>Converter</h3>
+<input id="amount">
+<select id="from"><option>IDR</option><option>USD</option></select>
+<select id="to"><option>USD</option><option>IDR</option></select>
+<button onclick="convert()">Convert</button>
+<p id="result"></p>
+</div>
+
+<canvas id="chart"></canvas>
+
+</div>
+
+<script>
+let data=[];
+let rates={};
+let py;
+
+/* AUTH (LOCAL) */
+function register(){
+ localStorage.setItem(user.value, pass.value);
+ alert("registered");
+}
+function login(){
+ if(localStorage.getItem(user.value)==pass.value){
+   app.style.display="block";
+   load();
+ }else alert("login gagal");
+}
+
+/* LOAD */
+async function load(){
+ await initPy();
+
+ let r=await fetch("https://api.exchangerate-api.com/v4/latest/IDR");
+ let d=await r.json();
+ rates=d.rates;
+ usd.innerText=rates.USD;
+
+ drawChart();
+}
+
+/* EXPENSE */
+function add(){
+ let val=Number(exp.value);
+ data.push(val);
+ analyzeAI();
+ chart.update();
+}
+
+/* CHART */
+let chart=new Chart(document.getElementById("chart"),{
+ type:'line',
+ data:{labels:[],datasets:[{data:data,borderColor:"#38bdf8"}]}
+});
+
+/* CONVERT */
+function convert(){
+ let res=(amount.value / rates[from.value]) * rates[to.value];
+ result.innerText=res.toFixed(2);
+}
+
+/* PYTHON INIT */
+async function initPy(){
+ py = await loadPyodide();
+ await py.loadPackage("numpy");
+
+ py.runPython(`
+import numpy as np
+
+def analyze(data):
+    if len(data)==0:
+        return {"status":"-","advice":"-"}
+    
+    total=sum(data)
+    avg=np.mean(data)
+    trend=np.polyfit(range(len(data)), data, 1)[0]
+
+    if total<2000000:
+        return {"status":"Hemat","advice":"Aman 👍"}
+    elif total<5000000:
+        return {"status":"Normal","advice":"Kontrol pengeluaran"}
+    else:
+        return {"status":"Boros","advice":"⚠️ Kurangi!"}
+`);
+}
+
+/* AI ANALYSIS */
+function analyzeAI(){
+ let result = py.runPython(`analyze(${JSON.stringify(data)})`);
+ let obj = result.toJs();
+
+ status.innerText=obj.status;
+ advice.innerText=obj.advice;
+
+ let b=document.getElementById("badge");
+
+ if(obj.status=="Hemat"){
+   b.className="badge hemat";
+ }else if(obj.status=="Normal"){
+   b.className="badge normal";
+ }else{
+   b.className="badge boros";
+ }
+}
+</script>
+
+</body>
+</html>
